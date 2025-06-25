@@ -1,8 +1,11 @@
 const Election = require('../models/Election');
 const Candidate = require('../models/Candidate');
 const Vote = require('../models/Vote');
+const { Parser } = require('json2csv');
 
-// Admin: Create election
+// =========================
+// Admin: Create a new election
+// =========================
 exports.createElection = async (req, res) => {
   try {
     const { title, deadline } = req.body;
@@ -16,7 +19,7 @@ exports.createElection = async (req, res) => {
   }
 };
 
-// Admin: Add candidate
+// Admin: Add a candidate to an election
 exports.addCandidate = async (req, res) => {
   try {
     const { name } = req.body;
@@ -35,7 +38,7 @@ exports.addCandidate = async (req, res) => {
   }
 };
 
-// Admin: Update candidate
+// Admin: Update a candidate's name
 exports.updateCandidate = async (req, res) => {
   try {
     const { name } = req.body;
@@ -48,7 +51,7 @@ exports.updateCandidate = async (req, res) => {
   }
 };
 
-// Admin: Delete candidate
+// Admin: Delete a candidate from an election
 exports.deleteCandidate = async (req, res) => {
   try {
     const { candidateId, electionId } = req.params;
@@ -61,7 +64,7 @@ exports.deleteCandidate = async (req, res) => {
   }
 };
 
-// Admin: List elections
+// Admin: List all elections and their status
 exports.listElections = async (req, res) => {
   try {
     const elections = await Election.find().populate('candidates');
@@ -71,7 +74,7 @@ exports.listElections = async (req, res) => {
   }
 };
 
-// Admin: Get results
+// Admin: Get results (JSON)
 exports.getResults = async (req, res) => {
   try {
     const { electionId } = req.params;
@@ -83,6 +86,27 @@ exports.getResults = async (req, res) => {
       results[candidate.name] = votes.filter(v => v.candidate.equals(candidate._id)).length;
     });
     res.json({ election: election.title, results });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// Admin: Download results as CSV
+exports.downloadResultsCSV = async (req, res) => {
+  try {
+    const { electionId } = req.params;
+    const election = await Election.findById(electionId).populate('candidates');
+    if (!election) return res.status(404).json({ message: 'Election not found' });
+    const votes = await Vote.find({ election: electionId });
+    const data = election.candidates.map(candidate => ({
+      Candidate: candidate.name,
+      Votes: votes.filter(v => v.candidate.equals(candidate._id)).length
+    }));
+    const parser = new Parser({ fields: ['Candidate', 'Votes'] });
+    const csv = parser.parse(data);
+    res.header('Content-Type', 'text/csv');
+    res.attachment(`${election.title}_results.csv`);
+    return res.send(csv);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
